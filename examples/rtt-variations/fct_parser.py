@@ -9,7 +9,7 @@ except ImportError:
 
 def parse_time_ns(tm):
     if tm.endswith('ns'):
-        return long(tm[:-4])
+        return int(tm[:-4])
     raise ValueError(tm)
 
 class FiveTuple(object):
@@ -37,27 +37,27 @@ class Flow(object):
                  'fct', 'txBytes', 'txPackets', 'rxPackets', 'rxBytes', 'lostPackets', 'throughput']
     def __init__(self, flow_el):
         self.flowId = int(flow_el.get('flowId'))
-        rxPackets = long(flow_el.get('rxPackets'))
-        txPackets = long(flow_el.get('txPackets'))
-        tx_duration = float(long(flow_el.get('timeLastTxPacket')[:-4]) - long(flow_el.get('timeFirstTxPacket')[:-4]))*1e-9
-        rx_duration = float(long(flow_el.get('timeLastRxPacket')[:-4]) - long(flow_el.get('timeFirstRxPacket')[:-4]))*1e-9
-        fct = float(long(flow_el.get('timeLastRxPacket')[:-4]) - long(flow_el.get('timeFirstTxPacket')[:-4]))*1e-9
-        txBytes = long(flow_el.get('txBytes'))
-        rxBytes = long(flow_el.get('rxBytes'))
+        rxPackets = int(flow_el.get('rxPackets'))
+        txPackets = int(flow_el.get('txPackets'))
+        tx_duration = float(int(flow_el.get('timeLastTxPacket')[:-4]) - int(flow_el.get('timeFirstTxPacket')[:-4]))*1e-9
+        rx_duration = float(int(flow_el.get('timeLastRxPacket')[:-4]) - int(flow_el.get('timeFirstRxPacket')[:-4]))*1e-9
+        fct = float(int(flow_el.get('timeLastRxPacket')[:-4]) - int(flow_el.get('timeFirstTxPacket')[:-4]))*1e-9
+        txBytes = int(flow_el.get('txBytes'))
+        rxBytes = int(flow_el.get('rxBytes'))
         self.txBytes = txBytes
         self.txPackets = txPackets
         self.rxBytes = rxBytes
         self.rxPackets = rxPackets
         self.rx_duration = rx_duration
-	throughput = rxBytes * 8 / fct / 1024 / 1024
+        throughput = rxBytes * 8 / fct / 1024 / 1024
         if fct > 0:
             self.fct = fct
         else:
             self.fct = None
-	if throughput > 0:
-	    self.throughput = throughput
-	else:
-	    self.throughput = None
+        if throughput > 0:
+            self.throughput = throughput
+        else:
+            self.throughput = None
         self.probe_stats_unsorted = []
         if rxPackets:
             self.hopCount = float(flow_el.get('timesForwarded')) / rxPackets + 1
@@ -70,11 +70,11 @@ class Flow(object):
             self.delayMean = None
             self.packetSizeMean = None
         if rx_duration > 0:
-            self.rxBitrate = long(flow_el.get('rxBytes'))*8 / rx_duration
+            self.rxBitrate = int(flow_el.get('rxBytes'))*8 / rx_duration
         else:
             self.rxBitrate = None
         if tx_duration > 0:
-            self.txBitrate = long(flow_el.get('txBytes'))*8 / tx_duration
+            self.txBitrate = int(flow_el.get('txBytes'))*8 / tx_duration
         else:
             self.txBitrate = None
         lost = float(flow_el.get('lostPackets'))
@@ -114,7 +114,7 @@ class Simulation(object):
                 flowId = int(stats.get('flowId'))
                 s = ProbeFlowStats()
                 s.packets = int(stats.get('packets'))
-                s.bytes = long(stats.get('bytes'))
+                s.bytes = stats.get('bytes')
                 s.probeId = probeId
                 if s.packets > 0:
                     s.delayFromFirstProbe =  parse_time_ns(stats.get('delayFromFirstProbeSum')) / float(s.packets)
@@ -124,7 +124,7 @@ class Simulation(object):
 
 def parse (fileName):
     file_obj = open(fileName)
-    print "Reading XML file ",
+    print("Reading XML file ")
 
     sys.stdout.flush()
     level = 0
@@ -140,7 +140,7 @@ def parse (fileName):
                 elem.clear() # won't need this any more
                 sys.stdout.write(".")
                 sys.stdout.flush()
-    print " done."
+    print(" done.")
 
     total_fct = 0
     flow_count = 0
@@ -174,9 +174,9 @@ def parse (fileName):
                 continue
             flow_count += 1
             total_fct += flow.fct
-	    total_packets += flow.txPackets
+            total_packets += flow.txPackets
             total_rx_packets += flow.rxPackets
-	    total_lost_packets += flow.lostPackets
+            total_lost_packets += flow.lostPackets
             flow_list.append(flow)
             if flow.txBytes > 10000000:
                 large_flow_count += 1
@@ -191,51 +191,51 @@ def parse (fileName):
                 small_flow_list.append(flow)
             t = flow.fiveTuple
             proto = {6: 'TCP', 17: 'UDP'} [t.protocol]
-            print "FlowID: %i (%s %s/%s --> %s/%i)" % (flow.flowId, proto, t.sourceAddress, t.sourcePort, t.destinationAddress, t.destinationPort)
-            print "\tTX bitrate: %.2f kbit/s" % (flow.txBitrate*1e-3,)
-            print "\tRX bitrate: %.2f kbit/s" % (flow.rxBitrate*1e-3,)
-            print "\tMean Delay: %.2f ms" % (flow.delayMean*1e3,)
-            print "\tPacket Loss Ratio: %.2f %%" % (flow.packetLossRatio*100)
-            print "\tFlow size: %i bytes, %i packets" % (flow.txBytes, flow.txPackets)
-            print "\tRx %i bytes, %i packets" % (flow.rxBytes, flow.rxPackets)
-            print "\tDevice Lost %i packets" % (flow.lostPackets)
-            print "\tReal Lost %i packets" % (flow.txPackets - flow.rxPackets)
-            print "\tFCT: %.4f" % (flow.fct)
+            print("FlowID: %i (%s %s/%s --> %s/%i)" % (flow.flowId, proto, t.sourceAddress, t.sourcePort, t.destinationAddress, t.destinationPort))
+            print("\tTX bitrate: %.2f kbit/s" % (flow.txBitrate*1e-3,))
+            print("\tRX bitrate: %.2f kbit/s" % (flow.rxBitrate*1e-3,))
+            print("\tMean Delay: %.2f ms" % (flow.delayMean*1e3,))
+            print("\tPacket Loss Ratio: %.2f %%" % (flow.packetLossRatio*100))
+            print("\tFlow size: %i bytes, %i packets" % (flow.txBytes, flow.txPackets))
+            print("\tRx %i bytes, %i packets" % (flow.rxBytes, flow.rxPackets))
+            print("\tDevice Lost %i packets" % (flow.lostPackets))
+            print("\tReal Lost %i packets" % (flow.txPackets - flow.rxPackets))
+            print("\tFCT: %.4f" % (flow.fct))
 
-    print "Avg FCT: %.4f" % (total_fct / flow_count)
+    print("Avg FCT: %.4f" % (total_fct / flow_count))
     avg_fct = (total_fct / flow_count)
     if large_flow_count == 0:
-        print "No large flows"
+        print("No large flows")
     else:
         avg_large_fct = (large_flow_total_fct / large_flow_count)
         avg_large_throughput = total_large_throughput / large_flow_count
-        print "Large Flow Avg FCT: %.4f" % (large_flow_total_fct / large_flow_count)
+        print("Large Flow Avg FCT: %.4f" % (large_flow_total_fct / large_flow_count))
 
     if small_flow_count == 0:
-        print "No small flows"
+        print("No small flows")
     else:
         avg_small_fct = (small_flow_total_fct / small_flow_count)
-        print "Small Flow Avg FCT: %.4f" % (small_flow_total_fct / small_flow_count)
+        print("Small Flow Avg FCT: %.4f" % (small_flow_total_fct / small_flow_count))
 
-    print "Total TX Packets: %i" % total_packets
-    print "Total RX Packets: %i" % total_rx_packets
-    print "Total Lost Packets: %i" % total_lost_packets
-    print "Max Small flow Id: %i" % max_small_flow_id
+    print("Total TX Packets: %i" % total_packets)
+    print("Total RX Packets: %i" % total_rx_packets)
+    print("Total Lost Packets: %i" % total_lost_packets)
+    print("Max Small flow Id: %i" % max_small_flow_id)
 
     small_flow_list.sort (key=lambda x: x.fct)
     small_index_99 = int(len(small_flow_list) * 0.99)
     if small_flow_list:
-	small_flow_fct_99 = small_flow_list[small_index_99].fct
+	    small_flow_fct_99 = small_flow_list[small_index_99].fct
     else:
-	small_flow_fct_99 = 0
+	    small_flow_fct_99 = 0
 
-    print "The FCT of 99 small flow is: %.4f" % small_flow_fct_99
+    print("The FCT of 99 small flow is: %.4f" % small_flow_fct_99)
 
     flow_list.sort (key=lambda x: x.fct)
     index_99 = int(len(flow_list) * 0.99)
     flow_fct_99 = flow_list[index_99].fct
 
-    print "The FCT of 99 flow is: %.4f" % flow_fct_99
+    print("The FCT of 99 flow is: %.4f" % flow_fct_99)
 
     return {'avg_fct': avg_fct, 'avg_small_fct': avg_small_fct, 'avg_large_fct': avg_large_fct, 'small_flow_99': small_flow_fct_99, 'flow_99' : flow_fct_99, 'total_tx' : total_packets, 'total_rx' : total_rx_packets, 'flow_count' : flow_count, 'large_throughput' : avg_large_throughput}
 
@@ -250,10 +250,10 @@ def main (argv):
     total_rx = 0
     flow_count = 0
     total_large_throughput = 0
-    print files
+    print(files)
     for fileName in files:
-	print (fileName)
-        result = parse (fileName)
+        print (fileName)
+        result = parse(fileName)
         total_fct += result['avg_fct']
         total_large_fct += result['avg_large_fct']
         total_small_fct += result['avg_small_fct']
@@ -264,16 +264,16 @@ def main (argv):
         flow_count += result['flow_count']
 #       total_large_throughput += result['large_throughput']
 
-	print ('')
+    print ('')
 
-    print "AVG FCT: %6f" % (total_fct / len(files))
-    print "AVG Large flow FCT: %6f" % (total_large_fct / len(files))
-    print "AVG Small flow FCT: %6f" % (total_small_fct / len(files))
-    print "AVG Small flow 99 FCT: %6f" % (total_small_flow_99 / len(files))
+    print("AVG FCT: %6f" % (total_fct / len(files)))
+    print("AVG Large flow FCT: %6f" % (total_large_fct / len(files)))
+    print("AVG Small flow FCT: %6f" % (total_small_fct / len(files)))
+    print("AVG Small flow 99 FCT: %6f" % (total_small_flow_99 / len(files)))
 #   print "AVG Flow 99 FCT: %6f" % (total_flow_99 / len(files))
-    print "Total Flow: %6f" % (flow_count / len(files))
-    print "Total TX: %6f" % (total_tx / len(files))
-    print "Total RX: %6f" % (total_rx / len(files))
+    print("Total Flow: %6f" % (flow_count / len(files)))
+    print("Total TX: %6f" % (total_tx / len(files)))
+    print("Total RX: %6f" % (total_rx / len(files)))
 #   print "Total Large Throughput: %6f " % (total_large_throughput / len(files))
 
 if __name__ == '__main__':

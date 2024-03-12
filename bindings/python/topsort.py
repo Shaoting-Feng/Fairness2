@@ -229,7 +229,7 @@ def topsort_levels_core(num_parents, children):
         raise CycleError(num_parents, children)
     else:
         # This is the end of the generator.
-        raise StopIteration
+        return
 
 
 def find_cycles(parent_children):

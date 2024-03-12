@@ -46,6 +46,8 @@
 #include <cstdlib>
 #include <unistd.h>
 
+#include <cstring>
+
 namespace ns3 {
 
 NS_LOG_COMPONENT_DEFINE ("TapBridge");
