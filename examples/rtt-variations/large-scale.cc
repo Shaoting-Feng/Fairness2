@@ -12,6 +12,11 @@
 #include <utility>
 #include <set>
 
+#include "my-source.h"
+#include <string>
+#include <iostream>
+#include <fstream>
+
 // The CDF in TrafficGenerator
 extern "C"
 {
@@ -99,56 +104,129 @@ void install_incast_applications (NodeContainer servers, long &flowCount, int SE
     }
 }
 
-void install_applications (int fromLeafId, NodeContainer servers, double requestRate, struct cdf_table *cdfTable,
-                           long &flowCount, long &totalFlowSize, int SERVER_COUNT, int LEAF_COUNT, double START_TIME, double END_TIME, double FLOW_LAUNCH_END_TIME)
+// void install_applications (int fromLeafId, NodeContainer servers, double requestRate, struct cdf_table *cdfTable,
+//                            long &flowCount, long &totalFlowSize, int SERVER_COUNT, int LEAF_COUNT, double START_TIME, double END_TIME, double FLOW_LAUNCH_END_TIME)
+// {
+//   NS_LOG_INFO ("Install applications:");
+//   for (int i = 0; i < SERVER_COUNT; i++) // servers with same id under all leaves behave the same 
+//     {
+//       int fromServerIndex = fromLeafId * SERVER_COUNT + i;
+
+//       double startTime = START_TIME + poission_gen_interval (requestRate);
+//       while (startTime < FLOW_LAUNCH_END_TIME)
+//         {
+//           flowCount ++;
+//           uint16_t port = PORT++;
+
+//           int destServerIndex = fromServerIndex;
+//           while (destServerIndex >= fromLeafId * SERVER_COUNT && destServerIndex < fromLeafId * SERVER_COUNT + SERVER_COUNT)
+//             {
+//               destServerIndex = rand_range (0, SERVER_COUNT * LEAF_COUNT);
+//               // prevents sending to servers under same leaf
+//             }
+
+//           Ptr<Node> destServer = servers.Get (destServerIndex);
+//           Ptr<Ipv4> ipv4 = destServer->GetObject<Ipv4> ();
+//           Ipv4InterfaceAddress destInterface = ipv4->GetAddress (1,0);
+//           Ipv4Address destAddress = destInterface.GetLocal ();
+
+//           BulkSendHelper source ("ns3::TcpSocketFactory", InetSocketAddress (destAddress, port));
+//           uint32_t flowSize = gen_random_cdf (cdfTable);
+//           uint32_t tos = rand() % 5;
+
+//           totalFlowSize += flowSize;
+
+//           source.SetAttribute ("SendSize", UintegerValue (PACKET_SIZE));
+//           source.SetAttribute ("MaxBytes", UintegerValue(flowSize));
+//           source.SetAttribute ("SimpleTOS", UintegerValue (tos));
+
+//           // Install apps
+//           ApplicationContainer sourceApp = source.Install (servers.Get (fromServerIndex));
+//           sourceApp.Start (Seconds (startTime));
+//           sourceApp.Stop (Seconds (END_TIME));
+
+//           // Install packet sinks
+//           PacketSinkHelper sink ("ns3::TcpSocketFactory",
+//                                  InetSocketAddress (Ipv4Address::GetAny (), port));
+//           ApplicationContainer sinkApp = sink.Install (servers. Get (destServerIndex));
+//           sinkApp.Start (Seconds (START_TIME));
+//           sinkApp.Stop (Seconds (END_TIME));
+
+//           startTime += poission_gen_interval (requestRate);
+//         }
+//     }
+// }
+
+void
+ParseAppBw (std::string input, std::vector<std::string>* values)
 {
-  NS_LOG_INFO ("Install applications:");
-  for (int i = 0; i < SERVER_COUNT; i++)
-    {
-      int fromServerIndex = fromLeafId * SERVER_COUNT + i;
+  size_t startPos = 0;
+  size_t commaPos;
 
-      double startTime = START_TIME + poission_gen_interval (requestRate);
-      while (startTime < FLOW_LAUNCH_END_TIME)
-        {
-          flowCount ++;
-          uint16_t port = PORT++;
+  // Search for commas and split the string within the loop
+  while ((commaPos = input.find(',', startPos)) != std::string::npos) {
+    std::string item = input.substr(startPos, commaPos - startPos);
+    (*values).push_back(item);
 
-          int destServerIndex = fromServerIndex;
-          while (destServerIndex >= fromLeafId * SERVER_COUNT && destServerIndex < fromLeafId * SERVER_COUNT + SERVER_COUNT)
-            {
-              destServerIndex = rand_range (0, SERVER_COUNT * LEAF_COUNT);
-            }
+    startPos = commaPos + 1;
+  }
 
-          Ptr<Node> destServer = servers.Get (destServerIndex);
-          Ptr<Ipv4> ipv4 = destServer->GetObject<Ipv4> ();
-          Ipv4InterfaceAddress destInterface = ipv4->GetAddress (1,0);
-          Ipv4Address destAddress = destInterface.GetLocal ();
+  // Process the last substring
+  std::string lastItem = input.substr(startPos);
+  (*values).push_back(lastItem);
+}
 
-          BulkSendHelper source ("ns3::TcpSocketFactory", InetSocketAddress (destAddress, port));
-          uint32_t flowSize = gen_random_cdf (cdfTable);
-          uint32_t tos = rand() % 5;
+double app_seconds_start0 = 0.1;
 
-          totalFlowSize += flowSize;
+void
+ParseAppSecondsChange (std::string input, std::vector<double>* values)
+{
+  size_t startPos = 0;
+  size_t commaPos;
 
-          source.SetAttribute ("SendSize", UintegerValue (PACKET_SIZE));
-          source.SetAttribute ("MaxBytes", UintegerValue(flowSize));
-          source.SetAttribute ("SimpleTOS", UintegerValue (tos));
+  // added on 09.01 to specify different start time 
+  int i = 0;
 
-          // Install apps
-          ApplicationContainer sourceApp = source.Install (servers.Get (fromServerIndex));
-          sourceApp.Start (Seconds (startTime));
-          sourceApp.Stop (Seconds (END_TIME));
+  // added on 09.02 to calculate delay in latter applications
+  double first_time = 0;
 
-          // Install packet sinks
-          PacketSinkHelper sink ("ns3::TcpSocketFactory",
-                                 InetSocketAddress (Ipv4Address::GetAny (), port));
-          ApplicationContainer sinkApp = sink.Install (servers. Get (destServerIndex));
-          sinkApp.Start (Seconds (START_TIME));
-          sinkApp.Stop (Seconds (END_TIME));
+  // Search for commas and split the string within the loop
+  while ((commaPos = input.find(',', startPos)) != std::string::npos) {
 
-          startTime += poission_gen_interval (requestRate);
-        }
+    std::string item = input.substr(startPos, commaPos - startPos);
+    double value = std::stod(item);
+    if (i != 0) {
+      (*values).push_back(value - first_time);
     }
+    else {
+      first_time = value;
+      app_seconds_start0 = value;   
+      }
+    startPos = commaPos + 1;
+
+    i++;
+  }
+  
+  // Process the last substring
+  std::string lastItem = input.substr(startPos);
+  double lastValue = std::stod(lastItem);
+  (*values).push_back(lastValue - first_time);
+}
+
+std::string result_dir = "tmp_index";
+
+static void
+RxWithAddressesPacketSink (Ptr<const Packet> p, const Address& from, const Address& local) {
+  MySourceIDTag tag;
+  if (p->FindFirstMatchingByteTag(tag)) {
+    // NS_LOG_DEBUG ("[" << Simulator::Now ().GetNanoSeconds() << "] SourceIDTag: " << tag.Get() << ", size: " << p->GetSize()
+    //              << ", from: " << InetSocketAddress::ConvertFrom(from).GetIpv4()
+    //              << ", local: " << InetSocketAddress::ConvertFrom(local).GetIpv4());
+  }
+
+  std::ofstream throput_ofs2 (result_dir + "/received_ms.dat", std::ios::out | std::ios::app);
+  throput_ofs2 << "[" << Simulator::Now ().GetMilliSeconds() << "] SourceIDTag: " << tag.Get() << ", size: " << p->GetSize()
+              << std::endl;
 }
 
 int main (int argc, char *argv[])
@@ -305,6 +383,8 @@ int main (int argc, char *argv[])
 
   ipv4.SetBase ("10.1.0.0", "255.255.255.0");
 
+  Ipv4InterfaceContainer serverInterfaceContainer;
+
   for (int i = 0; i < LEAF_COUNT; i++)
     {
       ipv4.NewNetwork ();
@@ -350,12 +430,18 @@ int main (int argc, char *argv[])
           Ptr<TrafficControlLayer> tcl1 = netDevice1->GetNode ()->GetObject<TrafficControlLayer> ();
           switchSideQueueDisc->SetNetDevice (netDevice1);
           tcl1->SetRootQueueDiscOnDevice (netDevice1, switchSideQueueDisc);
-
-          Ipv4InterfaceContainer interfaceContainer = ipv4.Assign (netDeviceContainer);
+          Ipv4InterfaceContainer ifc = ipv4.Assign (netDeviceContainer); 
+          Ipv4InterfaceContainer interfaceContainer;
+          interfaceContainer.Add(ifc);
+          serverInterfaceContainer.Add(ifc.Get(0));
 
           NS_LOG_INFO ("Leaf - " << i << " is connected to Server - " << j << " with address "
                        << interfaceContainer.GetAddress(0) << " <-> " << interfaceContainer.GetAddress (1)
                        << " with port " << netDeviceContainer.Get (0)->GetIfIndex () << " <-> " << netDeviceContainer.Get (1)->GetIfIndex ());
+
+          // std::cout << "Leaf - " << i << " is connected to Server - " << j << " with address "
+          //              << interfaceContainer.GetAddress(0) << " <-> " << interfaceContainer.GetAddress (1)
+          //              << " with port " << netDeviceContainer.Get (0)->GetIfIndex () << " <-> " << netDeviceContainer.Get (1)->GetIfIndex () << std::endl;
         }
     }
 
@@ -406,6 +492,11 @@ int main (int argc, char *argv[])
                            << " with port " << netDeviceContainer.Get (0)->GetIfIndex () << " <-> " << netDeviceContainer.Get (1)->GetIfIndex ()
                            << " with data rate " << spineLeafCapacity);
 
+              // std::cout << "Leaf - " << i << " is connected to Spine - " << j << " with address "
+              //              << ipv4InterfaceContainer.GetAddress(0) << " <-> " << ipv4InterfaceContainer.GetAddress (1)
+              //              << " with port " << netDeviceContainer.Get (0)->GetIfIndex () << " <-> " << netDeviceContainer.Get (1)->GetIfIndex ()
+              //              << " with data rate " << spineLeafCapacity << std::endl;
+
             }
         }
     }
@@ -435,39 +526,92 @@ int main (int argc, char *argv[])
       srand (randomSeed);
     }
 
-  NS_LOG_INFO ("Create applications");
+  // NS_LOG_INFO ("Create applications");
 
-  long flowCount = 0;
-  long totalFlowSize = 0;
+  // long flowCount = 0;
+  // long totalFlowSize = 0;
 
-  for (int fromLeafId = 0; fromLeafId < LEAF_COUNT; fromLeafId ++)
-    {
-      install_applications(fromLeafId, servers, requestRate, cdfTable, flowCount, totalFlowSize, SERVER_COUNT, LEAF_COUNT, START_TIME, END_TIME, FLOW_LAUNCH_END_TIME);
-    }
+  // for (int fromLeafId = 0; fromLeafId < LEAF_COUNT; fromLeafId ++)
+  //   {
+  //     install_applications(fromLeafId, servers, requestRate, cdfTable, flowCount, totalFlowSize, SERVER_COUNT, LEAF_COUNT, START_TIME, END_TIME, FLOW_LAUNCH_END_TIME);
+  //     // fromLeafId -- 0 to LEAF_COUNT
+  //     // servers -- a NodeContainer that contains all the servers
+  //     // requestRate -- calculated around Line 448
+  //     // flowCount -- recorded through this function
+  //     // totalFlowSize -- recorded through this function
+  //     // START_TIME -- start time of the simulation
+  //     // END_TIME -- end time of the simulation
+  //     // FLOW_LAUNCH_END_TIME -- end time of the flow launch period
+  //   }
 
-  NS_LOG_INFO ("Total flow: " << flowCount);
+  // NS_LOG_INFO ("Total flow: " << flowCount);
 
-  NS_LOG_INFO ("Actual average flow size: " << static_cast<double> (totalFlowSize) / flowCount);
+  // NS_LOG_INFO ("Actual average flow size: " << static_cast<double> (totalFlowSize) / flowCount);
 
-  NS_LOG_INFO ("Enabling flow monitor");
+  // NS_LOG_INFO ("Enabling flow monitor");
 
-  Ptr<FlowMonitor> flowMonitor;
-  FlowMonitorHelper flowHelper;
-  flowMonitor = flowHelper.InstallAll();
+  // Ptr<FlowMonitor> flowMonitor;
+  // FlowMonitorHelper flowHelper;
+  // flowMonitor = flowHelper.InstallAll();
 
 
-  flowMonitor->CheckForLostPackets ();
+  // flowMonitor->CheckForLostPackets ();
 
-  std::stringstream flowMonitorFilename;
+  // std::stringstream flowMonitorFilename;
 
-  flowMonitorFilename << "Large_Scale_" <<id << "_" << LEAF_COUNT << "X" << SPINE_COUNT << "_" << aqmStr << "_"  << transportProt << "_" << load << ".xml";
+  // flowMonitorFilename << "Large_Scale_" <<id << "_" << LEAF_COUNT << "X" << SPINE_COUNT << "_" << aqmStr << "_"  << transportProt << "_" << load << ".xml";
 
+  NS_LOG_INFO("================== Generate application ==================");
+
+  Ptr<MySource>* sources;
+  sources = new Ptr<MySource>[LEAF_COUNT * SERVER_COUNT];
+
+  uint32_t app_packet_size = 1440; // in bytes
+  std::vector<std::string> app_bw0{};
+  std::string app_bw0_str = "10Mbps";
+  ParseAppBw(app_bw0_str, &app_bw0);
+  std::string rm_dir_cmd = "rm -rf " + result_dir;
+  if (system (rm_dir_cmd.c_str ()) == -1) {
+    std::cout << "ERR: " << rm_dir_cmd << " failed, proceed anyway." << std::endl;
+  };
+  std::string create_dir_cmd = "mkdir -p " + result_dir;
+  if (system (create_dir_cmd.c_str ()) == -1) {
+    std::cout << "ERR: " << create_dir_cmd << " failed, proceed anyway." << std::endl;
+  }
+  std::vector<double> app_seconds_change0{};
+  std::string app_sc0_str = "0,10";
+  ParseAppSecondsChange(app_sc0_str, &app_seconds_change0);
+
+  for (uint32_t i = 0; i < LEAF_COUNT * SERVER_COUNT / 2; ++i) {
+    uint16_t sinkPort = 8080;
+    Address sinkAddress (InetSocketAddress (serverInterfaceContainer.GetAddress(i + LEAF_COUNT * SERVER_COUNT / 2), sinkPort)); 
+
+    /////////////////////////////////////////////////////////////////////////////   This is the receive application (rightleaf part)   /////////////////////////////////////////////////////////////////////////////////////////////
+    Ptr<PacketSink> sink = CreateObject<PacketSink> ();
+    sink->SetAttribute ("Protocol", StringValue ("ns3::TcpSocketFactory"));
+    sink->SetAttribute ("Local", AddressValue (InetSocketAddress (Ipv4Address::GetAny (), sinkPort)));
+    servers.Get(i + LEAF_COUNT * SERVER_COUNT / 2)->AddApplication(sink);
+    sink->SetStartTime (Seconds (START_TIME));
+    sink->SetStopTime (Seconds (END_TIME));  
+    sink->TraceConnectWithoutContext("RxWithAddresses", MakeCallback(&RxWithAddressesPacketSink));
+    //////////////////////////////////////////////////////////////////////////////////   receive application ends here   ///////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+    /////////////////////////////////////////////////////////////////////////////   This is the send application (leftleaf part)   /////////////////////////////////////////////////////////////////////////////////////////////////
+    Ptr<Socket> ns3TcpSocket = Socket::CreateSocket (servers.Get (i), TcpSocketFactory::GetTypeId ());
+    Ptr<MySource> app = CreateObject<MySource> ();
+    app->Setup (ns3TcpSocket, sinkAddress, app_packet_size, &app_bw0, i, false, result_dir, &app_seconds_change0); // i provides the source id for the packets
+    app->SetStartTime (Seconds (START_TIME));                             
+    servers.Get (i)->AddApplication (app);
+    app->SetStopTime (Seconds (END_TIME));
+    sources[i] = app;
+    //////////////////////////////////////////////////////////////////////////////////   send application ends here   ///////////////////////////////////////////////////////////////////////////////////////////////////////////////
+  }
 
   NS_LOG_INFO ("Start simulation");
   Simulator::Stop (Seconds (END_TIME));
   Simulator::Run ();
 
-  flowMonitor->SerializeToXmlFile(flowMonitorFilename.str (), true, true);
+  // flowMonitor->SerializeToXmlFile(flowMonitorFilename.str (), true, true);
 
   Simulator::Destroy ();
   free_cdf (cdfTable);
