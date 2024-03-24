@@ -18,7 +18,11 @@
 // added on 08.08 for data rate change
 #include <vector>
 
+#include "ns3/log.h"
+
 using namespace ns3;
+
+NS_LOG_COMPONENT_DEFINE ("LargeScale");
 
 class MySource : public Application 
 {
@@ -118,6 +122,8 @@ MySource::StartApplication (void)
     Simulator::Schedule (Seconds((*m_change_time)[i]), &MySource::ChangeDataRate, this, i);
   }
   Simulator::Schedule (Seconds((*m_change_time)[(*m_change_time).size()-1]), &MySource::StopSendNew, this);
+
+  NS_LOG_INFO ("Sending starts");
 }
 
 void 
