@@ -32,6 +32,21 @@
 
 using namespace ns3;
 
+enum RunMode {
+    TLB, // 
+    CONGA, // 3
+    CONGA_FLOW,
+    CONGA_ECMP,
+    PRESTO, // 5
+    WEIGHTED_PRESTO, // Distribute the packet according to the topology // 6
+    DRB, // 4
+    FlowBender, // 7
+    ECMP, 
+    Clove, // 8
+    DRILL, // 9
+    LetFlow // 10
+};
+
 enum AQM {
   TCN,
   ECNSharp
