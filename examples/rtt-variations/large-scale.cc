@@ -25,13 +25,12 @@
 #include <iostream>
 #include <fstream>
 #include <unistd.h>
+#include <iomanip>
 
 #define LINK_CAPACITY_BASE    1000000000          // 1Gbps
 #define BUFFER_SIZE 250                           // 250 packets
 
 using namespace ns3;
-
-// NS_LOG_COMPONENT_DEFINE ("LargeScale");
 
 enum AQM {
   TCN,
@@ -97,9 +96,7 @@ ParseAppSecondsChange (std::string input, std::vector<double>* values)
 std::string result_dir = "tmp_index";
 
 static void
-RxWithAddressesPacketSink (Ptr<const Packet> p, const Address& from, const Address& local) {
-  NS_LOG_INFO ("A packet has been received.");
-
+RxWithAddressesPacketSink (Ptr<const Packet> p, const Address &) {
   MySourceIDTag tag;
   if (p->FindFirstMatchingByteTag(tag)) {}
 
@@ -108,23 +105,26 @@ RxWithAddressesPacketSink (Ptr<const Packet> p, const Address& from, const Addre
               << std::endl;
 }
 
+// create an example to check where the packet drops
+Ptr<DelayQueueDisc> exampleDQD;
+Ptr<QueueDisc> exampleQD;
+
+void
+PrintProgress (Time interval)
+{
+  std::size_t n1 = exampleDQD -> GetNInternalQueues();
+  std::size_t n2 = exampleQD -> GetNInternalQueues();
+  NS_LOG_INFO ("Progress: " << std::fixed << std::setprecision (1) << Simulator::Now ().GetSeconds () << "[s]");
+  NS_LOG_INFO ("Number of internal queues in exampleDQD: " << n1);
+  NS_LOG_INFO ("Number of internal queues in exampleQD: " << n2);
+  Simulator::Schedule (interval, &PrintProgress, interval);
+}
+
 int main (int argc, char *argv[])
 {
 #if 1
   LogComponentEnable ("LargeScale", LOG_LEVEL_INFO);
 #endif
-
-  // Create the result directory
-  if (access(result_dir.c_str(), F_OK) == -1 ) {
-    std::string rm_dir_cmd = "rm -rf " + result_dir;
-    if (system (rm_dir_cmd.c_str ()) == -1) {
-      std::cout << "ERR: " << rm_dir_cmd << " failed, proceed anyway." << std::endl;
-    };
-    std::string create_dir_cmd = "mkdir -p " + result_dir;
-    if (system (create_dir_cmd.c_str ()) == -1) {
-      std::cout << "ERR: " << create_dir_cmd << " failed, proceed anyway." << std::endl;
-    }
-  }
 
   // Command line parameters parsing
   unsigned randomSeed = 0;
@@ -138,10 +138,10 @@ int main (int argc, char *argv[])
 
   uint32_t linkLatency = 10;
 
-  int SERVER_COUNT = 8;
-  int SPINE_COUNT = 4;
-  int LEAF_COUNT = 4;
-  int LINK_COUNT = 1;
+  int SERVER_COUNT = 6;
+  int SPINE_COUNT = 2;
+  int LEAF_COUNT = 2;
+  int LINK_COUNT = 2;
 
   uint64_t spineLeafCapacity = 10;
   uint64_t leafServerCapacity = 10;
@@ -195,6 +195,26 @@ int main (int argc, char *argv[])
     {
       return 0;
     }
+
+  // Create the result directory
+  std::string flag = "initial";
+  result_dir += "/" + flag + "_" + aqmStr;
+  if (access(result_dir.c_str(), F_OK) == -1 ) {
+    std::string create_dir_cmd = "mkdir -p " + result_dir;
+    if (system (create_dir_cmd.c_str ()) == -1) {
+      std::cout << "ERR: " << create_dir_cmd << " failed, proceed anyway." << std::endl;
+    }
+  }
+  else {
+    std::string rm_dir_cmd1 = "rm -rf " + result_dir + "/received_ms.dat";
+    if (system (rm_dir_cmd1.c_str ()) == -1) {
+      std::cout << "ERR: " << rm_dir_cmd1 << " failed, proceed anyway." << std::endl;
+    };
+    std::string rm_dir_cmd2 = "rm -rf " + result_dir + "/sent_ms.dat";
+    if (system (rm_dir_cmd2.c_str ()) == -1) {
+      std::cout << "ERR: " << rm_dir_cmd2 << " failed, proceed anyway." << std::endl;
+    };
+  }
 
   if (transportProt.compare ("DcTcp") == 0)
     {
@@ -294,6 +314,12 @@ int main (int argc, char *argv[])
             }
           Ptr<QueueDisc> switchSideQueueDisc = switchSideQueueFactory.Create<QueueDisc> ();
 
+          // configure the example to be the first server - leaf
+          if (i == 0 && j == 0) {
+            exampleDQD = delayQueueDisc;
+            exampleQD = delayQueueDisc;
+          }
+
           Ptr<NetDevice> netDevice0 = netDeviceContainer.Get (0);
           Ptr<TrafficControlLayer> tcl0 = netDevice0->GetNode ()->GetObject<TrafficControlLayer> ();
 
@@ -310,8 +336,8 @@ int main (int argc, char *argv[])
           serverInterfaceContainer.Add(ifc.Get(0));
 
           NS_LOG_INFO ("Leaf - " << i << " is connected to Server - " << j << " with address "
-                       << interfaceContainer.GetAddress(0) << " <-> " << interfaceContainer.GetAddress (1)
-                       << " with port " << netDeviceContainer.Get (0)->GetIfIndex () << " <-> " << netDeviceContainer.Get (1)->GetIfIndex ());
+                       << interfaceContainer.GetAddress(1) << " <-> " << interfaceContainer.GetAddress (0)
+                       << " with port " << netDeviceContainer.Get (1)->GetIfIndex () << " <-> " << netDeviceContainer.Get (0)->GetIfIndex ());
         }
     }
 
@@ -355,7 +381,6 @@ int main (int argc, char *argv[])
               spineQueueDisc->SetNetDevice (netDevice1);
               tcl1->SetRootQueueDiscOnDevice (netDevice1, spineQueueDisc);
 
-
               Ipv4InterfaceContainer ipv4InterfaceContainer = ipv4.Assign (netDeviceContainer);
               NS_LOG_INFO ("Leaf - " << i << " is connected to Spine - " << j << " with address "
                            << ipv4InterfaceContainer.GetAddress(0) << " <-> " << ipv4InterfaceContainer.GetAddress (1)
@@ -394,7 +419,7 @@ int main (int argc, char *argv[])
   std::string app_sc0_str = "0,10";
   ParseAppSecondsChange(app_sc0_str, &app_seconds_change0);
 
-  for (uint32_t i = 0; i < LEAF_COUNT * SERVER_COUNT / 2; ++i) {
+  for (int i = 0; i < LEAF_COUNT * SERVER_COUNT / 2; ++i) {
     uint16_t sinkPort = 8080;
     
     /////////////////////////////////////////////////////////////////////////////   This is the receive application (rightleaf part)   /////////////////////////////////////////////////////////////////////////////////////////////
@@ -405,7 +430,7 @@ int main (int argc, char *argv[])
     servers.Get(i + LEAF_COUNT * SERVER_COUNT / 2)->AddApplication(sink);
     sink->SetStartTime (Seconds (START_TIME));
     sink->SetStopTime (Seconds (END_TIME2));  
-    sink->TraceConnectWithoutContext("RxWithAddresses", MakeCallback(&RxWithAddressesPacketSink));
+    sink->TraceConnectWithoutContext("Rx", MakeCallback(&RxWithAddressesPacketSink));
     //////////////////////////////////////////////////////////////////////////////////   receive application ends here   ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 
     /////////////////////////////////////////////////////////////////////////////   This is the send application (leftleaf part)   /////////////////////////////////////////////////////////////////////////////////////////////////
@@ -420,9 +445,23 @@ int main (int argc, char *argv[])
     //////////////////////////////////////////////////////////////////////////////////   send application ends here   ///////////////////////////////////////////////////////////////////////////////////////////////////////////////
   }
 
+  // Monitor Flow
+  Ptr<FlowMonitor> flowMonitor;
+  FlowMonitorHelper flowHelper;
+  flowMonitor = flowHelper.InstallAll();
+  flowMonitor->CheckForLostPackets ();
+  std::stringstream flowMonitorFilename;
+  flowMonitorFilename << LEAF_COUNT << "X" << SPINE_COUNT << "_" << aqmStr << "_"  << transportProt << ".xml";
+
+  NS_LOG_DEBUG("================== Tracing ==================");
+  uint32_t progress_interval_ms = 100;
+  Simulator::Schedule (MilliSeconds(progress_interval_ms), &PrintProgress, MilliSeconds(progress_interval_ms));
+
   NS_LOG_INFO ("Start simulation");
   Simulator::Stop (Seconds (END_TIME));
   Simulator::Run ();
+
+  flowMonitor->SerializeToXmlFile(flowMonitorFilename.str (), true, true);
 
   Simulator::Destroy ();
   NS_LOG_INFO ("Stop simulation");

@@ -159,7 +159,6 @@ void PacketSink::StopApplication ()     // Called at time specified by Stop
 
 void PacketSink::HandleRead (Ptr<Socket> socket)
 {
-  NS_LOG_FUNCTION (this << socket);
   Ptr<Packet> packet;
   Address from;
   while ((packet = socket->RecvFrom (from)))

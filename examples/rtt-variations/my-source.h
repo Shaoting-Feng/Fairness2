@@ -75,7 +75,7 @@ MySource::~MySource()
 }
 
 void
-MySource::Setup (Ptr<Socket> socket, Address address, uint32_t packetSize, std::vector<std::string>* dataRate, uint32_t appid, bool poisson, std::string result_dir, std::vector<double>* change_time)
+MySource::Setup (Ptr<Socket> socket, Address address, uint32_t packetSize, std::vector<std::string>* dataRate, uint32_t appid, bool /*unusedParam1*/, std::string result_dir, std::vector<double>* change_time)
 {
   m_socket = socket;
   m_peer = address;
@@ -123,7 +123,7 @@ MySource::StartApplication (void)
   }
   Simulator::Schedule (Seconds((*m_change_time)[(*m_change_time).size()-1]), &MySource::StopSendNew, this);
 
-  NS_LOG_INFO ("Sending starts");
+  // NS_LOG_INFO ("Sending starts");
 }
 
 void 
