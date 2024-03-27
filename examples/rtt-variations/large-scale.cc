@@ -271,13 +271,43 @@ int main (int argc, char *argv[])
 
   NS_LOG_INFO ("Install Internet stacks");
   InternetStackHelper internet;
+  Ipv4StaticRoutingHelper staticRoutingHelper;
+  Ipv4CongaRoutingHelper congaRoutingHelper;
   Ipv4GlobalRoutingHelper globalRoutingHelper;
+  Ipv4ListRoutingHelper listRoutingHelper;
+  Ipv4XPathRoutingHelper xpathRoutingHelper;
+  Ipv4DrbRoutingHelper drbRoutingHelper;
+  Ipv4DrillRoutingHelper drillRoutingHelper;
+  Ipv4LetFlowRoutingHelper letFlowRoutingHelper;
 
-  internet.SetRoutingHelper (globalRoutingHelper);
+  if (runMode == CONGA || runMode == CONGA_FLOW || runMode == CONGA_ECMP) {
+    internet.SetRoutingHelper (staticRoutingHelper);
+    internet.Install (servers);
 
-  internet.Install (servers);
-  internet.Install (spines);
-  internet.Install (leaves);
+    internet.SetRoutingHelper (congaRoutingHelper);
+    internet.Install (spines);
+    internet.Install (leaves);
+  } else if (runMode == PRESTO || runMode == WEIGHTED_PRESTO || runMode == DRB) {
+    if (runMode == DRB) {
+        Config::SetDefault ("ns3::Ipv4DrbRouting::Mode", UintegerValue (0)); // Per dest
+    } else
+    {
+        Config::SetDefault ("ns3::Ipv4DrbRouting::Mode", UintegerValue (1)); // Per flow
+    }
+
+    listRoutingHelper.Add (drbRoutingHelper, 1);
+    listRoutingHelper.Add (globalRoutingHelper, 0);
+    internet.SetRoutingHelper (listRoutingHelper);
+    internet.Install (servers);
+
+    listRoutingHelper.Clear ();
+    listRoutingHelper.Add (xpathRoutingHelper, 1);
+    listRoutingHelper.Add (globalRoutingHelper, 0);
+    internet.SetRoutingHelper (listRoutingHelper);
+    internet.Install (spines);
+    internet.Install (leaves);
+}
+
 
   NS_LOG_INFO ("Install channels and assign addresses");
 
