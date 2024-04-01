@@ -155,6 +155,9 @@ int main (int argc, char *argv[]) {
   uint32_t resequenceInOrderSize = 100; // 100 Packets
   uint32_t resequenceOutOrderTimer = 100; // MicroSeconds
   uint32_t app_packet_size = 1440; // in bytes
+  std::string runModeStr = "Conga";
+  uint32_t letFlowFlowletTimeout = 500;
+  uint32_t congaFlowletTimeout = 500;
 
   // Other parameters
   uint64_t SPINE_LEAF_CAPACITY = spineLeafCapacity * LINK_CAPACITY_BASE;
@@ -188,6 +191,9 @@ int main (int argc, char *argv[]) {
   cmd.AddValue ("resequenceInOrderSize", "In order queue size in resequence buffer", resequenceInOrderSize);
   cmd.AddValue ("resequenceOutOrderTimer", "Out order queue timeout in resequence buffer", resequenceOutOrderTimer);
   cmd.AddValue ("app_packet_size", "App payload size", app_packet_size);
+  cmd.AddValue ("runMode", "Running mode of this simulation: Conga, Conga-flow, Presto, Weighted-Presto, DRB, FlowBender, ECMP, Clove, DRILL, LetFlow", runModeStr);
+  cmd.AddValue ("letFlowFlowletTimeout", "Flowlet timeout in LetFlow", letFlowFlowletTimeout);
+  cmd.AddValue ("congaFlowletTimeout", "Flowlet timeout in Conga", congaFlowletTimeout);
 
   cmd.Parse (argc, argv);
 
@@ -435,12 +441,17 @@ int main (int argc, char *argv[]) {
   p2p.SetChannelAttribute ("Delay", TimeValue(LINK_LATENCY));
   p2p.SetQueue ("ns3::DropTailQueue", "MaxPackets", UintegerValue (10));
   ipv4.SetBase ("10.1.0.0", "255.255.255.0");
-  Ipv4InterfaceContainer serverInterfaceContainer;
-
+  
+  // Set container
+  std::vector<Ipv4Address> leafNetworks (LEAF_COUNT);
+  std::vector<Ipv4Address> serverAddresses (SERVER_COUNT * LEAF_COUNT);
+  std::map<std::pair<int, int>, uint32_t> leafToSpinePath;
+  std::map<std::pair<int, int>, uint32_t> spineToLeafPath;
   std::vector<Ptr<Ipv4TLBProbing>> probings (SERVER_COUNT * LEAF_COUNT);
 
   for (int i = 0; i < LEAF_COUNT; i++) {
-    ipv4.NewNetwork ();
+    Ipv4Address network = ipv4.NewNetwork ();
+    leafNetworks[i] = network;
 
     for (int j = 0; j < SERVER_COUNT; j++) {
       // assign addresses
@@ -448,7 +459,7 @@ int main (int argc, char *argv[]) {
       NodeContainer nodeContainer = NodeContainer (servers.Get (serverIndex), leaves.Get (i));
       NetDeviceContainer netDeviceContainer = p2p.Install (nodeContainer);
       Ipv4InterfaceContainer ifc = ipv4.Assign (netDeviceContainer); 
-      serverInterfaceContainer.Add(ifc.Get(0));
+      serverAddresses [serverIndex] = ifc.GetAddress (0);
 
       // about QueueDisc
       // 1. set up the server queue disc
@@ -537,14 +548,27 @@ int main (int argc, char *argv[]) {
 
   NS_LOG_INFO ("Configuring switches");
   p2p.SetDeviceAttribute ("DataRate", DataRateValue (DataRate (SPINE_LEAF_CAPACITY)));
+  std::set<std::pair<uint32_t, uint32_t> > asymLink; // set< (A, B) > Leaf A -> Spine B is asymmetric
 
-  for (int i = 0; i < LEAF_COUNT; i++)
-    {
-      for (int j = 0; j < SPINE_COUNT; j++)
-        {
-
-          for (int l = 0; l < LINK_COUNT; l++)
-            {
+  for (int i = 0; i < LEAF_COUNT; i++) {
+    if (runMode == CONGA || runMode == CONGA_FLOW || runMode == CONGA_ECMP) {
+	    Ptr<Ipv4CongaRouting> congaLeaf = congaRoutingHelper.GetCongaRouting (leaves.Get (i)->GetObject<Ipv4> ());
+      congaLeaf->SetLeafId (i);
+	    congaLeaf->SetTDre (MicroSeconds (30));
+	    congaLeaf->SetAlpha (0.2);
+	    congaLeaf->SetLinkCapacity(DataRate(SPINE_LEAF_CAPACITY));
+	    if (runMode == CONGA) {
+	      congaLeaf->SetFlowletTimeout (MicroSeconds (congaFlowletTimeout));
+	    }
+	    if (runMode == CONGA_FLOW) {
+	      congaLeaf->SetFlowletTimeout (MilliSeconds (13));
+	    }
+	    if (runMode == CONGA_ECMP) {
+	      congaLeaf->EnableEcmpMode ();
+	    }
+    }
+    for (int j = 0; j < SPINE_COUNT; j++) {
+      for (int l = 0; l < LINK_COUNT; l++) {
               ipv4.NewNetwork ();
 
               NodeContainer nodeContainer = NodeContainer (leaves.Get (i), spines.Get (j));
@@ -579,9 +603,9 @@ int main (int argc, char *argv[]) {
                            << ipv4InterfaceContainer.GetAddress(0) << " <-> " << ipv4InterfaceContainer.GetAddress (1)
                            << " with port " << netDeviceContainer.Get (0)->GetIfIndex () << " <-> " << netDeviceContainer.Get (1)->GetIfIndex ()
                            << " with data rate " << spineLeafCapacity);
-            }
-        }
+      }
     }
+  }
 
   NS_LOG_INFO ("Populate global routing tables");
   Ipv4GlobalRoutingHelper::PopulateRoutingTables ();
@@ -627,7 +651,7 @@ int main (int argc, char *argv[]) {
     //////////////////////////////////////////////////////////////////////////////////   receive application ends here   ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 
     /////////////////////////////////////////////////////////////////////////////   This is the send application (leftleaf part)   /////////////////////////////////////////////////////////////////////////////////////////////////
-    Address sinkAddress (InetSocketAddress (serverInterfaceContainer.GetAddress(i + LEAF_COUNT * SERVER_COUNT / 2), sinkPort));
+    Address sinkAddress (InetSocketAddress (serverAddresses [i + LEAF_COUNT * SERVER_COUNT / 2], sinkPort));
     Ptr<Socket> ns3TcpSocket = Socket::CreateSocket (servers.Get (i), TcpSocketFactory::GetTypeId ());
     Ptr<MySource> app = CreateObject<MySource> ();
     app->Setup (ns3TcpSocket, sinkAddress, app_packet_size, &app_bw0, i, false, result_dir, &app_seconds_change0); // i provides the source id for the packets
