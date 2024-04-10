@@ -294,10 +294,10 @@ int main (int argc, char *argv[]) {
     runMode = PRESTO;
   }
   else if (runModeStr.compare ("Weighted-Presto") == 0) {
-    if (asymCapacity == false && asymCapacity2 == false) {
-      NS_LOG_ERROR ("The Weighted-Presto has to work with asymmetric topology. For a symmetric topology, please use Presto instead");
-      return 0;
-    }
+    // if (asymCapacity == false && asymCapacity2 == false) {
+    //   NS_LOG_ERROR ("The Weighted-Presto has to work with asymmetric topology. For a symmetric topology, please use Presto instead");
+    //   return 0;
+    // }
     runMode = WEIGHTED_PRESTO;
   }
   else if (runModeStr.compare ("DRB") == 0) {
@@ -569,40 +569,43 @@ int main (int argc, char *argv[]) {
     }
     for (int j = 0; j < SPINE_COUNT; j++) {
       for (int l = 0; l < LINK_COUNT; l++) {
-              ipv4.NewNetwork ();
+        // We do not consider asym senerio
+        // If considering asym, codes should be added here
+        // Asym means some link will have only 1/10 the capacity of others 
+        ipv4.NewNetwork ();
 
-              NodeContainer nodeContainer = NodeContainer (leaves.Get (i), spines.Get (j));
-              NetDeviceContainer netDeviceContainer = p2p.Install (nodeContainer);
-              ObjectFactory switchSideQueueFactory;
+        NodeContainer nodeContainer = NodeContainer (leaves.Get (i), spines.Get (j));
+        NetDeviceContainer netDeviceContainer = p2p.Install (nodeContainer);
+              
+        ObjectFactory switchSideQueueFactory;
 
-              if (aqm == TCN)
-                {
-                  switchSideQueueFactory.SetTypeId ("ns3::TCNQueueDisc");
-                }
-              else
-                {
-                  switchSideQueueFactory.SetTypeId ("ns3::ECNSharpQueueDisc");
-                }
+        if (aqm == TCN) {
+          switchSideQueueFactory.SetTypeId ("ns3::TCNQueueDisc");
+        }
+        else {
+          switchSideQueueFactory.SetTypeId ("ns3::ECNSharpQueueDisc");
+        }
 
-              Ptr<QueueDisc> leafQueueDisc = switchSideQueueFactory.Create<QueueDisc> ();
+        // Leaf to Spine Queue
+        Ptr<QueueDisc> leafQueueDisc = switchSideQueueFactory.Create<QueueDisc> ();
+        Ptr<NetDevice> netDevice0 = netDeviceContainer.Get (0);
+        Ptr<TrafficControlLayer> tcl0 = netDevice0->GetNode ()->GetObject<TrafficControlLayer> ();
+        leafQueueDisc->SetNetDevice (netDevice0);
+        tcl0->SetRootQueueDiscOnDevice (netDevice0, leafQueueDisc);
 
-              Ptr<NetDevice> netDevice0 = netDeviceContainer.Get (0);
-              Ptr<TrafficControlLayer> tcl0 = netDevice0->GetNode ()->GetObject<TrafficControlLayer> ();
-              leafQueueDisc->SetNetDevice (netDevice0);
-              tcl0->SetRootQueueDiscOnDevice (netDevice0, leafQueueDisc);
+        // Spine to Leaf Queue
+        Ptr<QueueDisc> spineQueueDisc = switchSideQueueFactory.Create<QueueDisc> ();
+        Ptr<NetDevice> netDevice1 = netDeviceContainer.Get (1);
+        Ptr<TrafficControlLayer> tcl1 = netDevice1->GetNode ()->GetObject<TrafficControlLayer> ();
+        spineQueueDisc->SetNetDevice (netDevice1);
+        tcl1->SetRootQueueDiscOnDevice (netDevice1, spineQueueDisc);
 
-              Ptr<QueueDisc> spineQueueDisc = switchSideQueueFactory.Create<QueueDisc> ();
-
-              Ptr<NetDevice> netDevice1 = netDeviceContainer.Get (1);
-              Ptr<TrafficControlLayer> tcl1 = netDevice1->GetNode ()->GetObject<TrafficControlLayer> ();
-              spineQueueDisc->SetNetDevice (netDevice1);
-              tcl1->SetRootQueueDiscOnDevice (netDevice1, spineQueueDisc);
-
-              Ipv4InterfaceContainer ipv4InterfaceContainer = ipv4.Assign (netDeviceContainer);
-              NS_LOG_INFO ("Leaf - " << i << " is connected to Spine - " << j << " with address "
-                           << ipv4InterfaceContainer.GetAddress(0) << " <-> " << ipv4InterfaceContainer.GetAddress (1)
-                           << " with port " << netDeviceContainer.Get (0)->GetIfIndex () << " <-> " << netDeviceContainer.Get (1)->GetIfIndex ()
-                           << " with data rate " << spineLeafCapacity);
+        Ipv4InterfaceContainer ipv4InterfaceContainer = ipv4.Assign (netDeviceContainer);
+              
+        NS_LOG_INFO ("Leaf - " << i << " is connected to Spine - " << j << " with address "
+                      << ipv4InterfaceContainer.GetAddress(0) << " <-> " << ipv4InterfaceContainer.GetAddress (1)
+                      << " with port " << netDeviceContainer.Get (0)->GetIfIndex () << " <-> " << netDeviceContainer.Get (1)->GetIfIndex ()
+                      << " with data rate " << spineLeafCapacity);
       }
     }
   }
